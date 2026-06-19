@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CLICKBATTLE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg:#f5f0e8; --ink:#1a1612; --mid:#6b6358; --rule:#d4cec4;
+      --red:#e8321a; --blue:#1a5ce8; --yellow:#f5c800; --white:#ffffff;
+      --radius:6px; --display:'Bebas Neue',sans-serif; --body:'DM Sans',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--ink);font-family:var(--body);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+    header{width:100%;border-bottom:2px solid var(--ink);padding:12px 32px;display:flex;align-items:baseline;gap:16px}
+    .logo{font-family:var(--display);font-size:2rem;letter-spacing:.04em;line-height:1}
+    .logo em{color:var(--red);font-style:normal}
+    .logo-sub{font-size:.72rem;color:var(--mid);letter-spacing:.12em;text-transform:uppercase}
+    .page{display:none;width:100%;max-width:680px;padding:40px 24px}
+    .page.active{display:flex;flex-direction:column;align-items:center}
+    .lobby-hero{font-family:var(--display);font-size:clamp(4rem,14vw,7rem);line-height:.9;text-align:center;letter-spacing:.02em;margin-bottom:8px}
+    .lobby-hero span{color:var(--red)}
+    .lobby-sub{font-size:.9rem;color:var(--mid);text-align:center;margin-bottom:40px}
+    .card{width:100%;border:2px solid var(--ink);border-radius:var(--radius);padding:28px;margin-bottom:16px;background:var(--white)}
+    .card h2{font-family:var(--display);font-size:1.4rem;letter-spacing:.05em;margin-bottom:16px;border-bottom:1px solid var(--rule);padding-bottom:10px}
+    .field-group{display:flex;flex-direction:column;gap:10px}
+    label{font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mid)}
+    input[type="text"]{width:100%;padding:11px 14px;border:2px solid var(--ink);border-radius:var(--radius);font-family:var(--body);font-size:1rem;background:var(--bg);outline:none;transition:border-color .15s}
+    input[type="text"]:focus{border-color:var(--red)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 28px;border:2px solid var(--ink);border-radius:var(--radius);font-family:var(--body);font-size:.9rem;font-weight:700;cursor:pointer;transition:transform .08s,box-shadow .08s;background:var(--white);color:var(--ink)}
+    .btn:active{transform:translate(2px,2px);box-shadow:none!important}
+    .btn-primary{background:var(--ink);color:var(--bg);box-shadow:3px 3px 0 var(--red)}
+    .btn-primary:hover{box-shadow:5px 5px 0 var(--red)}
+    .btn-secondary{box-shadow:3px 3px 0 var(--ink)}
+    .btn-secondary:hover{box-shadow:5px 5px 0 var(--ink)}
+    .btn-full{width:100%;margin-top:12px}
+    .btn-danger{background:var(--red);color:var(--white);border-color:var(--red);box-shadow:3px 3px 0 var(--ink)}
+    .divider{display:flex;align-items:center;gap:12px;margin:8px 0;color:var(--mid);font-size:.75rem;font-weight:700;letter-spacing:.1em}
+    .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--rule)}
+    .room-code-display{text-align:center;padding:24px;background:var(--ink);color:var(--bg);border-radius:var(--radius);margin-bottom:20px}
+    .room-code-label{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;opacity:.6;margin-bottom:6px}
+    .room-code-value{font-family:var(--display);font-size:3.5rem;letter-spacing:.15em;color:var(--yellow)}
+    .player-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+    .player-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--rule);border-radius:var(--radius);background:var(--bg)}
+    .player-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;border:2px solid var(--ink)}
+    .player-name{font-weight:500;flex:1}
+    .player-badge{font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:99px;background:var(--yellow);color:var(--ink)}
+    .waiting-msg{text-align:center;font-size:.85rem;color:var(--mid);margin-bottom:16px}
+    .dots::after{content:'';animation:dots 1.2s steps(4,end) infinite}
+    @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+    .game-header{width:100%;display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+    .timer-ring{width:80px;height:80px;position:relative}
+    .timer-ring svg{transform:rotate(-90deg)}
+    .timer-ring circle{fill:none;stroke-width:6}
+    .timer-ring .track{stroke:var(--rule)}
+    .timer-ring .fill{stroke:var(--red);stroke-linecap:round;transition:stroke-dashoffset 1s linear}
+    .timer-number{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:1.6rem;color:var(--ink)}
+    .scoreboard{display:flex;flex-direction:column;gap:6px;flex:1;margin:0 20px}
+    .score-row{display:flex;align-items:center;gap:10px;font-size:.85rem;font-weight:500}
+    .score-bar-wrap{flex:1;height:10px;background:var(--rule);border-radius:99px;overflow:hidden}
+    .score-bar{height:100%;border-radius:99px;transition:width .2s;min-width:4px}
+    .score-num{font-family:var(--display);font-size:1.1rem;min-width:36px;text-align:right}
+    .click-zone{width:100%;display:flex;flex-direction:column;align-items:center;gap:16px}
+    #click-btn{width:220px;height:220px;border-radius:50%;border:4px solid var(--ink);background:var(--red);color:var(--white);font-family:var(--display);font-size:2.2rem;letter-spacing:.06em;cursor:pointer;box-shadow:6px 6px 0 var(--ink);transition:transform .06s,box-shadow .06s;user-select:none;-webkit-user-select:none}
+    #click-btn:active,#click-btn.pop{transform:translate(4px,4px) scale(.96);box-shadow:2px 2px 0 var(--ink)}
+    #click-btn.idle{background:var(--mid);cursor:not-allowed}
+    .my-count{font-family:var(--display);font-size:5rem;line-height:1;color:var(--ink)}
+    .my-count-label{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mid)}
+    .results-list{width:100%;display:flex;flex-direction:column;gap:10px;margin:24px 0}
+    .result-row{display:flex;align-items:center;gap:16px;padding:16px 20px;border:2px solid var(--ink);border-radius:var(--radius);background:var(--white)}
+    .result-rank{font-family:var(--display);font-size:2rem;min-width:40px;color:var(--mid)}
+    .result-rank.gold{color:#f5c800}.result-rank.silver{color:#aaa}.result-rank.bronze{color:#cd7f32}
+    .result-name{flex:1;font-weight:700}
+    .result-score{font-family:var(--display);font-size:1.8rem}
+    .result-winner{background:var(--ink);color:var(--bg)}
+    .result-winner .result-rank,.result-winner .result-score{color:var(--yellow)}
+    .trophy{font-size:4rem;text-align:center;margin-bottom:8px}
+    .results-title{font-family:var(--display);font-size:2.5rem;text-align:center;letter-spacing:.04em}
+    #toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 20px;border-radius:var(--radius);font-size:.85rem;font-weight:500;opacity:0;transition:opacity .2s;pointer-events:none;z-index:999;white-space:nowrap}
+    #toast.show{opacity:1}
+    .error-msg{color:var(--red);font-size:.82rem;margin-top:6px;display:none}
+    .error-msg.show{display:block}
+    .gap-row{display:flex;gap:10px;width:100%}
+    .gap-row .btn{flex:1}
+    @media(max-width:480px){#click-btn{width:180px;height:180px;font-size:1.8rem}.lobby-hero{font-size:4rem}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">CLICK<em>BATTLE</em></div>
+  <div class="logo-sub">실시간 클릭 대전</div>
+</header>
+
+<!-- Lobby -->
+<div class="page active" id="page-lobby">
+  <div class="lobby-hero">CLICK<br><span>BATTLE</span></div>
+  <p class="lobby-sub">제한 시간 안에 가장 많이 클릭한 사람이 이깁니다</p>
+  <div class="card" style="width:100%;max-width:420px">
+    <h2>참가하기</h2>
+    <div class="field-group">
+      <label for="nickname">닉네임</label>
+      <input type="text" id="nickname" placeholder="나의 닉네임" maxlength="12" autocomplete="off"/>
+    </div>
+    <button class="btn btn-primary btn-full" id="btn-create">방 만들기</button>
+    <div class="divider">또는</div>
+    <div class="field-group">
+      <label for="room-code-input">방 코드</label>
+      <input type="text" id="room-code-input" placeholder="6자리 코드 입력" maxlength="6" autocomplete="off" style="text-transform:uppercase;letter-spacing:.15em;font-size:1.1rem"/>
+      <span class="error-msg" id="join-error">방을 찾을 수 없습니다.</span>
+    </div>
+    <button class="btn btn-secondary btn-full" id="btn-join">방 참가하기</button>
+  </div>
+</div>
+
+<!-- Waiting -->
+<div class="page" id="page-wait">
+  <div class="room-code-display" style="width:100%">
+    <div class="room-code-label">방 코드 — 친구에게 공유하세요</div>
+    <div class="room-code-value" id="display-room-code">------</div>
+  </div>
+  <div class="card" style="width:100%">
+    <h2>참가자 <span id="player-count" style="color:var(--mid);font-size:1rem">0/8</span></h2>
+    <div class="player-list" id="player-list"></div>
+    <p class="waiting-msg">플레이어를 기다리는 중<span class="dots"></span></p>
+    <div id="host-controls" style="display:none">
+      <button class="btn btn-primary btn-full" id="btn-start" disabled>시작하기 (최소 2명)</button>
+    </div>
+    <button class="btn btn-danger btn-full" style="margin-top:12px" id="btn-leave">나가기</button>
+  </div>
+</div>
+
+<!-- Countdown -->
+<div class="page" id="page-countdown">
+  <div style="text-align:center">
+    <div style="font-family:var(--display);font-size:1rem;letter-spacing:.2em;color:var(--mid);margin-bottom:16px">게임 시작까지</div>
+    <div id="countdown-num" style="font-family:var(--display);font-size:10rem;line-height:1;color:var(--red)">3</div>
+    <div style="font-family:var(--display);font-size:1.4rem;letter-spacing:.1em;color:var(--mid);margin-top:8px">준비하세요!</div>
+  </div>
+</div>
+
+<!-- Game -->
+<div class="page" id="page-game">
+  <div class="game-header">
+    <div class="timer-ring">
+      <svg width="80" height="80" viewBox="0 0 80 80">
+        <circle class="track" cx="40" cy="40" r="34"/>
+        <circle class="fill" id="timer-arc" cx="40" cy="40" r="34" stroke-dasharray="213.6" stroke-dashoffset="0"/>
+      </svg>
+      <div class="timer-number" id="timer-num">30</div>
+    </div>
+    <div class="scoreboard" id="live-scoreboard"></div>
+  </div>
+  <div class="click-zone">
+    <div class="my-count" id="my-count">0</div>
+    <div class="my-count-label">내 클릭 수</div>
+    <button id="click-btn" class="idle">CLICK</button>
+  </div>
+</div>
+
+<!-- Results -->
+<div class="page" id="page-results">
+  <div class="trophy" id="trophy-icon">🏆</div>
+  <div class="results-title" id="results-title">결과</div>
+  <div class="results-list" id="results-list"></div>
+  <div class="gap-row">
+    <button class="btn btn-primary" id="btn-play-again">다시 하기</button>
+    <button class="btn btn-secondary" id="btn-main-menu">메인으로</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://tbhnzmdhvegetzhlaxyq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_YyBI9uTOCaqZG7MAAzuJxA_Sma5O0Ia';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const COLORS = ['#e8321a','#1a5ce8','#22c55e','#f5c800','#a855f7','#f97316','#06b6d4','#ec4899'];
+const GAME_SECONDS = 30;
+
+const $ = id => document.getElementById(id);
+const showPage = id => { document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); $(id).classList.add('active'); };
+function showToast(msg,dur=2400){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+function randCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from({length:6},()=>c[Math.random()*c.length|0]).join('');}
+
+let myId = 'p_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+let roomCode = null;
+let isHost = false;
+let myClicks = 0;
+let gameActive = false;
+let gameTimerInterval = null;
+let subscription = null;
+let roomData = null;
+
+// ── Lobby ──
+$('btn-create').onclick = createRoom;
+$('btn-join').onclick = joinRoom;
+$('room-code-input').addEventListener('keydown', e=>{ if(e.key==='Enter') joinRoom(); });
+$('nickname').addEventListener('keydown', e=>{ if(e.key==='Enter') createRoom(); });
+$('btn-start').onclick = startGame;
+$('btn-leave').onclick = leaveRoom;
+$('click-btn').onclick = handleClick;
+$('btn-play-again').onclick = playAgain;
+$('btn-main-menu').onclick = goMainMenu;
+
+async function createRoom() {
+  const nick = $('nickname').value.trim();
+  if (!nick) { showToast('닉네임을 입력하세요'); return; }
+  roomCode = randCode();
+  isHost = true;
+  const players = { [myId]: { name: nick, clicks: 0, color: COLORS[0], joinedAt: Date.now() } };
+  const { error } = await sb.from('rooms').insert({ code: roomCode, host: myId, status: 'waiting', players });
+  if (error) { showToast('방 만들기 실패: '+error.message); console.error(error); return; }
+  enterWaiting();
+}
+
+async function joinRoom() {
+  const nick = $('nickname').value.trim();
+  const code = $('room-code-input').value.trim().toUpperCase();
+  $('join-error').classList.remove('show');
+  if (!nick) { showToast('닉네임을 입력하세요'); return; }
+  if (code.length !== 6) { showToast('방 코드 6자리를 입력하세요'); return; }
+
+  const { data, error } = await sb.from('rooms').select('*').eq('code', code).single();
+  if (error || !data) { $('join-error').classList.add('show'); return; }
+  if (data.status !== 'waiting') { showToast('이미 게임이 시작된 방입니다'); return; }
+
+  const players = data.players || {};
+  const count = Object.keys(players).length;
+  if (count >= 8) { showToast('방이 꽉 찼습니다'); return; }
+
+  players[myId] = { name: nick, clicks: 0, color: COLORS[count % COLORS.length], joinedAt: Date.now() };
+  roomCode = code;
+  isHost = false;
+
+  await sb.from('rooms').update({ players }).eq('code', roomCode);
+  enterWaiting();
+}
+
+function enterWaiting() {
+  $('display-room-code').textContent = roomCode;
+  $('host-controls').style.display = isHost ? 'block' : 'none';
+  showPage('page-wait');
+  subscribe();
+}
+
+function subscribe() {
+  if (subscription) sb.removeChannel(subscription);
+  subscription = sb.channel('room-'+roomCode)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `code=eq.${roomCode}` }, payload => {
+      roomData = payload.new;
+      handleRoomUpdate(payload.new);
+    })
+    .subscribe();
+}
+
+let countdownDone=false, gameDone=false, resultsDone=false;
+
+function handleRoomUpdate(room) {
+  if (!room) return;
+  if (room.status === 'waiting') renderWaiting(room);
+  else if (room.status === 'countdown' && !countdownDone) { countdownDone=true; beginCountdown(room); }
+  else if (room.status === 'playing' && !gameDone) { gameDone=true; beginGame(room); }
+  else if (room.status === 'playing') renderLiveScoreboard(room.players);
+  else if (room.status === 'ended' && !resultsDone) { resultsDone=true; showResults(room); }
+}
+
+function renderWaiting(room) {
+  const players = room.players || {};
+  const sorted = Object.entries(players).sort((a,b)=>a[1].joinedAt-b[1].joinedAt);
+  $('player-count').textContent = `${sorted.length}/8`;
+  $('player-list').innerHTML = sorted.map(([id,p],i)=>`
+    <div class="player-row">
+      <div class="player-avatar" style="background:${p.color||COLORS[i]};color:#fff">${p.name[0].toUpperCase()}</div>
+      <div class="player-name">${p.name}${id===myId?' (나)':''}</div>
+      ${room.host===id?'<span class="player-badge">방장</span>':''}
+    </div>`).join('');
+  if (isHost) $('btn-start').disabled = sorted.length < 2;
+}
+
+async function startGame() {
+  await sb.from('rooms').update({ status: 'countdown' }).eq('code', roomCode);
+}
+
+function beginCountdown() {
+  showPage('page-countdown');
+  let n = 3;
+  $('countdown-num').textContent = n;
+  const iv = setInterval(async ()=>{
+    n--;
+    if (n <= 0) {
+      clearInterval(iv);
+      $('countdown-num').textContent = 'GO!';
+      if (isHost) await sb.from('rooms').update({ status: 'playing', started_at: new Date().toISOString() }).eq('code', roomCode);
+    } else {
+      $('countdown-num').textContent = n;
+    }
+  }, 1000);
+}
+
+function beginGame(room) {
+  myClicks = 0;
+  gameActive = true;
+  let secs = GAME_SECONDS;
+  $('my-count').textContent = '0';
+  $('click-btn').classList.remove('idle');
+  showPage('page-game');
+  renderLiveScoreboard(room.players);
+
+  const arc = $('timer-arc');
+  const circumference = 213.6;
+  gameTimerInterval = setInterval(async ()=>{
+    secs--;
+    $('timer-num').textContent = secs;
+    arc.style.strokeDashoffset = circumference * (1 - secs/GAME_SECONDS);
+    if (secs <= 0) {
+      clearInterval(gameTimerInterval);
+      gameActive = false;
+      $('click-btn').classList.add('idle');
+      await flushClicks();
+      if (isHost) await sb.from('rooms').update({ status: 'ended' }).eq('code', roomCode);
+    }
+  }, 1000);
+}
+
+function handleClick() {
+  if (!gameActive) return;
+  myClicks++;
+  $('my-count').textContent = myClicks;
+  const btn = $('click-btn');
+  btn.classList.add('pop');
+  setTimeout(()=>btn.classList.remove('pop'), 80);
+  if (myClicks % 5 === 0) flushClicks();
+}
+
+async function flushClicks() {
+  const { data } = await sb.from('rooms').select('players').eq('code', roomCode).single();
+  if (!data) return;
+  const players = data.players || {};
+  if (players[myId]) {
+    players[myId].clicks = myClicks;
+    await sb.from('rooms').update({ players }).eq('code', roomCode);
+  }
+}
+
+function renderLiveScoreboard(players) {
+  if (!players) return;
+  const sorted = Object.entries(players).sort((a,b)=>b[1].clicks-a[1].clicks);
+  const max = Math.max(...sorted.map(([,p])=>p.clicks), 1);
+  $('live-scoreboard').innerHTML = sorted.slice(0,5).map(([id,p],i)=>`
+    <div class="score-row">
+      <div style="font-size:.75rem;color:var(--mid);min-width:14px">${i+1}</div>
+      <div style="font-size:.8rem;font-weight:${id===myId?'700':'500'};min-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}${id===myId?' ★':''}</div>
+      <div class="score-bar-wrap"><div class="score-bar" style="width:${(p.clicks/max*100).toFixed(1)}%;background:${p.color||COLORS[i]}"></div></div>
+      <div class="score-num">${p.clicks}</div>
+    </div>`).join('');
+}
+
+async function showResults(room) {
+  clearInterval(gameTimerInterval);
+  await flushClicks();
+  // 최종 데이터 다시 로드
+  const { data } = await sb.from('rooms').select('players').eq('code', roomCode).single();
+  const players = (data && data.players) || room.players || {};
+  const sorted = Object.entries(players).sort((a,b)=>b[1].clicks-a[1].clicks);
+  const winner = sorted[0];
+  $('trophy-icon').textContent = winner[0]===myId ? '🏆' : '🎯';
+  $('results-title').textContent = winner[0]===myId ? '우승!' : `${winner[1].name} 우승!`;
+  const rankIcons=['gold','silver','bronze'];
+  const rankEmoji=['🥇','🥈','🥉'];
+  $('results-list').innerHTML = sorted.map(([id,p],i)=>`
+    <div class="result-row${i===0?' result-winner':''}">
+      <div class="result-rank ${rankIcons[i]||''}">${rankEmoji[i]||(i+1)}</div>
+      <div class="result-name">${p.name}${id===myId?' (나)':''}</div>
+      <div class="result-score">${p.clicks}<span style="font-size:.7rem;opacity:.5;margin-left:4px">클릭</span></div>
+    </div>`).join('');
+  showPage('page-results');
+}
+
+async function leaveRoom() {
+  if (subscription) sb.removeChannel(subscription);
+  const { data } = await sb.from('rooms').select('players').eq('code', roomCode).single();
+  if (data) {
+    const players = data.players || {};
+    delete players[myId];
+    if (Object.keys(players).length === 0 || isHost) {
+      await sb.from('rooms').delete().eq('code', roomCode);
+    } else {
+      await sb.from('rooms').update({ players }).eq('code', roomCode);
+    }
+  }
+  resetState();
+  showPage('page-lobby');
+}
+
+async function playAgain() {
+  countdownDone=false; gameDone=false; resultsDone=false;
+  myClicks=0; gameActive=false;
+  clearInterval(gameTimerInterval);
+  const { data } = await sb.from('rooms').select('players').eq('code', roomCode).single();
+  if (data) {
+    const players = data.players || {};
+    Object.keys(players).forEach(id => players[id].clicks = 0);
+    await sb.from('rooms').update({ status:'waiting', players }).eq('code', roomCode);
+  }
+  $('click-btn').classList.add('idle');
+  $('timer-num').textContent = GAME_SECONDS;
+  $('timer-arc').style.strokeDashoffset = '0';
+  enterWaiting();
+}
+
+function goMainMenu() {
+  if (subscription) sb.removeChannel(subscription);
+  resetState();
+  showPage('page-lobby');
+}
+
+function resetState() {
+  clearInterval(gameTimerInterval);
+  roomCode=null; isHost=false; myClicks=0; gameActive=false;
+  countdownDone=false; gameDone=false; resultsDone=false;
+  $('room-code-input').value='';
+  $('join-error').classList.remove('show');
+  $('click-btn').classList.add('idle');
+  $('timer-num').textContent=GAME_SECONDS;
+  $('timer-arc').style.strokeDashoffset='0';
+  myId='p_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+}
+</script>
+</body>
+</html>
