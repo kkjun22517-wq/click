@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>타자배틀</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #0e0e14;
+      --surface: #16161f;
+      --surface2: #1e1e2e;
+      --border: #2a2a3e;
+      --accent: #7c6fff;
+      --accent2: #ff6f9c;
+      --green: #4fffb0;
+      --yellow: #ffe66d;
+      --text: #e8e8f0;
+      --muted: #6b6b8a;
+      --radius: 10px;
+      --font: 'Noto Sans KR', sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+
+    /* Header */
+    header { width: 100%; padding: 16px 32px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+    .logo { font-size: 1.4rem; font-weight: 900; letter-spacing: -0.03em; }
+    .logo span { color: var(--accent); }
+    .logo em { color: var(--accent2); font-style: normal; }
+
+    /* Pages */
+    .page { display: none; width: 100%; max-width: 700px; padding: 40px 20px; }
+    .page.active { display: flex; flex-direction: column; align-items: center; }
+
+    /* Lobby */
+    .hero { font-size: clamp(3rem, 10vw, 5.5rem); font-weight: 900; text-align: center; letter-spacing: -0.04em; line-height: 1; margin-bottom: 10px; }
+    .hero span { color: var(--accent); }
+    .hero em { color: var(--accent2); font-style: normal; }
+    .hero-sub { color: var(--muted); font-size: 0.9rem; text-align: center; margin-bottom: 40px; }
+
+    .card { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 14px; }
+    .card h2 { font-size: 1rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 18px; }
+
+    label { font-size: 0.75rem; font-weight: 700; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; display: block; margin-bottom: 6px; }
+    input[type="text"] { width: 100%; padding: 12px 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-family: var(--font); font-size: 1rem; outline: none; transition: border-color 0.15s; margin-bottom: 12px; }
+    input[type="text"]:focus { border-color: var(--accent); }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center; padding: 13px 24px; border-radius: var(--radius); font-family: var(--font); font-size: 0.9rem; font-weight: 700; cursor: pointer; border: none; transition: opacity 0.15s, transform 0.08s; width: 100%; }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: 0.9; }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); margin-top: 10px; }
+    .btn-secondary:hover { border-color: var(--accent); }
+    .btn-danger { background: var(--accent2); color: #fff; margin-top: 10px; }
+
+    .divider { display: flex; align-items: center; gap: 12px; margin: 14px 0; color: var(--muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    .error-msg { color: var(--accent2); font-size: 0.8rem; margin-top: -8px; margin-bottom: 10px; display: none; }
+    .error-msg.show { display: block; }
+
+    /* Waiting */
+    .room-code-box { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; margin-bottom: 20px; }
+    .room-code-label { font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .room-code-value { font-family: var(--mono); font-size: 2.8rem; font-weight: 700; color: var(--accent); letter-spacing: 0.2em; }
+
+    .player-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .player-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--surface2); border-radius: var(--radius); border: 1px solid var(--border); }
+    .player-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .player-name-text { font-weight: 500; flex: 1; }
+    .host-badge { font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 99px; background: var(--accent); color: #fff; }
+    .me-badge { font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+    .wait-note { text-align: center; color: var(--muted); font-size: 0.85rem; margin-bottom: 16px; }
+    .dots::after { content: ''; animation: dots 1.2s steps(4,end) infinite; }
+    @keyframes dots { 0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'} }
+
+    /* Countdown */
+    .countdown-wrap { text-align: center; }
+    .countdown-label { font-size: 0.8rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 20px; }
+    .countdown-num { font-size: 10rem; font-weight: 900; line-height: 1; color: var(--accent); letter-spacing: -0.04em; }
+
+    /* Game */
+    .game-top { width: 100%; margin-bottom: 24px; }
+    .progress-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+    .progress-row { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; }
+    .prog-name { min-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+    .prog-bar-wrap { flex: 1; height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .prog-bar { height: 100%; border-radius: 99px; transition: width 0.3s; }
+    .prog-pct { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); min-width: 36px; text-align: right; }
+
+    /* Sentence display */
+    .sentence-box { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; font-size: 1.3rem; line-height: 1.9; letter-spacing: 0.02em; word-break: keep-all; }
+    .char-done { color: var(--green); }
+    .char-wrong { color: var(--accent2); text-decoration: underline; }
+    .char-cursor { background: var(--accent); color: #fff; border-radius: 2px; }
+    .char-pending { color: var(--muted); }
+
+    .typing-input { width: 100%; padding: 14px 18px; background: var(--surface2); border: 2px solid var(--border); border-radius: var(--radius); color: var(--text); font-family: var(--font); font-size: 1.1rem; outline: none; transition: border-color 0.15s; }
+    .typing-input:focus { border-color: var(--accent); }
+    .typing-input.error { border-color: var(--accent2); }
+
+    .game-stats { display: flex; gap: 20px; margin-top: 14px; }
+    .stat { text-align: center; }
+    .stat-val { font-family: var(--mono); font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    /* Timer bar */
+    .timer-bar-wrap { width: 100%; height: 4px; background: var(--border); border-radius: 99px; margin-bottom: 20px; overflow: hidden; }
+    .timer-bar { height: 100%; background: var(--accent); border-radius: 99px; transition: width 1s linear; }
+
+    /* Results */
+    .result-hero { font-size: 2.5rem; font-weight: 900; text-align: center; letter-spacing: -0.03em; margin-bottom: 6px; }
+    .result-sub { color: var(--muted); text-align: center; font-size: 0.85rem; margin-bottom: 28px; }
+    .result-list { width: 100%; display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+    .result-card { display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+    .result-card.winner { border-color: var(--accent); background: #1a1730; }
+    .result-rank { font-size: 1.8rem; min-width: 40px; }
+    .result-info { flex: 1; }
+    .result-name { font-weight: 700; font-size: 1rem; }
+    .result-detail { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+    .result-wpm { font-family: var(--mono); font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+    .result-wpm span { font-size: 0.7rem; color: var(--muted); }
+
+    .gap-row { display: flex; gap: 10px; width: 100%; }
+    .gap-row .btn { flex: 1; }
+
+    /* Toast */
+    #toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 99px; font-size: 0.85rem; font-weight: 500; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 999; white-space: nowrap; }
+    #toast.show { opacity: 1; }
+
+    @media(max-width:480px){ .sentence-box{font-size:1.1rem} .hero{font-size:3rem} }
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">타자<span>배</span><em>틀</em></div>
+</header>
+
+<!-- Lobby -->
+<div class="page active" id="page-lobby">
+  <div class="hero">타자<br><span>배</span><em>틀</em></div>
+  <p class="hero-sub">같은 문장을 가장 빨리 타이핑한 사람이 우승!</p>
+  <div class="card" style="max-width:420px">
+    <h2>참가하기</h2>
+    <label for="nickname">닉네임</label>
+    <input type="text" id="nickname" placeholder="나의 닉네임" maxlength="10" autocomplete="off"/>
+    <button class="btn btn-primary" id="btn-create">방 만들기</button>
+    <div class="divider">또는</div>
+    <label for="code-input">방 코드</label>
+    <input type="text" id="code-input" placeholder="6자리 코드" maxlength="6" autocomplete="off" style="text-transform:uppercase;letter-spacing:.15em"/>
+    <span class="error-msg" id="join-error">방을 찾을 수 없습니다.</span>
+    <button class="btn btn-secondary" id="btn-join">방 참가하기</button>
+  </div>
+</div>
+
+<!-- Waiting -->
+<div class="page" id="page-wait">
+  <div class="room-code-box" style="max-width:420px;width:100%">
+    <div class="room-code-label">방 코드 — 친구에게 공유하세요</div>
+    <div class="room-code-value" id="display-code">------</div>
+  </div>
+  <div class="card" style="max-width:420px">
+    <h2>참가자 <span id="player-count" style="color:var(--accent)">0/6</span></h2>
+    <div class="player-grid" id="player-grid"></div>
+    <p class="wait-note">친구를 기다리는 중<span class="dots"></span></p>
+    <div id="host-ctrl" style="display:none">
+      <button class="btn btn-primary" id="btn-start" disabled>게임 시작 (최소 2명)</button>
+    </div>
+    <button class="btn btn-danger" id="btn-leave">나가기</button>
+  </div>
+</div>
+
+<!-- Countdown -->
+<div class="page" id="page-countdown">
+  <div class="countdown-wrap">
+    <div class="countdown-label">게임 시작까지</div>
+    <div class="countdown-num" id="cd-num">3</div>
+    <div style="color:var(--muted);margin-top:16px;font-size:.9rem">손가락 준비하세요!</div>
+  </div>
+</div>
+
+<!-- Game -->
+<div class="page" id="page-game">
+  <div class="game-top">
+    <div class="timer-bar-wrap"><div class="timer-bar" id="timer-bar"></div></div>
+    <div class="progress-list" id="progress-list"></div>
+  </div>
+  <div class="sentence-box" id="sentence-display"></div>
+  <input type="text" class="typing-input" id="typing-input" placeholder="여기에 타이핑하세요..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+  <div class="game-stats">
+    <div class="stat"><div class="stat-val" id="stat-wpm">0</div><div class="stat-label">타/분</div></div>
+    <div class="stat"><div class="stat-val" id="stat-acc">100%</div><div class="stat-label">정확도</div></div>
+    <div class="stat"><div class="stat-val" id="stat-time">60</div><div class="stat-label">남은 시간</div></div>
+  </div>
+</div>
+
+<!-- Results -->
+<div class="page" id="page-results">
+  <div style="font-size:3rem;text-align:center;margin-bottom:8px" id="result-trophy">🏆</div>
+  <div class="result-hero" id="result-title">결과</div>
+  <div class="result-sub" id="result-sub"></div>
+  <div class="result-list" id="result-list"></div>
+  <div class="gap-row">
+    <button class="btn btn-primary" id="btn-again">다시 하기</button>
+    <button class="btn btn-secondary" id="btn-menu">메인으로</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://tbhnzmdhvegetzhlaxyq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_YyBI9uTOCaqZG7MAAzuJxA_Sma5O0Ia';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── 문장 목록 ──
+const SENTENCES = [
+  '다람쥐 헌 쳇바퀴에 타고파',
+  '키보드를 빠르게 치는 연습을 해봅시다',
+  '가나다라마바사아자차카타파하',
+  '하늘을 나는 파란 새가 노래를 부릅니다',
+  '봄바람이 살랑살랑 불어오는 따뜻한 오후',
+  '오늘도 열심히 타자 연습을 하는 나는 최고',
+  '세상에서 가장 빠른 타자왕이 되어보자',
+  '파란 하늘 아래 하얀 구름이 두둥실 떠갑니다',
+  '맛있는 음식을 먹으면 기분이 좋아진다',
+  '친구들과 함께하는 타자 게임은 정말 재미있어요',
+  '빠른 손가락으로 정확하게 타이핑해 봅시다',
+  '컴퓨터 자판을 보지 않고 칠 수 있도록 연습하자',
+];
+
+const COLORS = ['#7c6fff','#ff6f9c','#4fffb0','#ffe66d','#ff9f43','#48dbfb','#ff6b6b'];
+
+const $ = id => document.getElementById(id);
+const showPage = id => { document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); $(id).classList.add('active'); };
+function toast(msg, dur=2400){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),dur); }
+function randCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; return Array.from({length:6},()=>c[Math.random()*c.length|0]).join(''); }
+
+let myId = 'u_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+let roomCode = null, isHost = false;
+let currentSentence = '';
+let myTyped = 0, myErrors = 0, myStartTime = null;
+let gameActive = false, gameTimerInterval = null;
+let subscription = null;
+let countdownDone=false, gameDone=false, resultsDone=false;
+const GAME_SECS = 60;
+
+// ── Buttons ──
+$('btn-create').onclick = createRoom;
+$('btn-join').onclick = joinRoom;
+$('code-input').addEventListener('keydown', e=>{ if(e.key==='Enter') joinRoom(); });
+$('nickname').addEventListener('keydown', e=>{ if(e.key==='Enter') createRoom(); });
+$('btn-start').onclick = startGame;
+$('btn-leave').onclick = leaveRoom;
+$('typing-input').addEventListener('input', handleTyping);
+$('btn-again').onclick = playAgain;
+$('btn-menu').onclick = goMenu;
+
+// ── Create ──
+async function createRoom() {
+  const nick = $('nickname').value.trim();
+  if (!nick) { toast('닉네임을 입력하세요'); return; }
+  roomCode = randCode();
+  isHost = true;
+  const sentence = SENTENCES[Math.floor(Math.random()*SENTENCES.length)];
+  const players = { [myId]: { name: nick, color: COLORS[0], progress: 0, wpm: 0, done: false, joinedAt: Date.now() } };
+  const { error } = await sb.from('rooms').insert({ code: roomCode, host: myId, status: 'waiting', sentence, players });
+  if (error) { toast('오류: '+error.message); console.error(error); return; }
+  enterWaiting();
+}
+
+// ── Join ──
+async function joinRoom() {
+  const nick = $('nickname').value.trim();
+  const code = $('code-input').value.trim().toUpperCase();
+  $('join-error').classList.remove('show');
+  if (!nick) { toast('닉네임을 입력하세요'); return; }
+  if (code.length !== 6) { toast('방 코드 6자리를 입력하세요'); return; }
+  const { data, error } = await sb.from('rooms').select('*').eq('code', code).single();
+  if (error || !data) { $('join-error').classList.add('show'); return; }
+  if (data.status !== 'waiting') { toast('이미 게임이 시작됐습니다'); return; }
+  const players = data.players || {};
+  const count = Object.keys(players).length;
+  if (count >= 6) { toast('방이 꽉 찼습니다 (최대 6명)'); return; }
+  players[myId] = { name: nick, color: COLORS[count%COLORS.length], progress: 0, wpm: 0, done: false, joinedAt: Date.now() };
+  roomCode = code;
+  isHost = false;
+  await sb.from('rooms').update({ players }).eq('code', roomCode);
+  enterWaiting();
+}
+
+// ── Waiting ──
+function enterWaiting() {
+  $('display-code').textContent = roomCode;
+  $('host-ctrl').style.display = isHost ? 'block' : 'none';
+  showPage('page-wait');
+  subscribe();
+}
+
+function subscribe() {
+  if (subscription) sb.removeChannel(subscription);
+  subscription = sb.channel('typing-'+roomCode)
+    .on('postgres_changes', { event:'*', schema:'public', table:'rooms', filter:`code=eq.${roomCode}` }, payload => {
+      handleUpdate(payload.new);
+    }).subscribe();
+}
+
+function handleUpdate(room) {
+  if (!room) return;
+  if (room.status === 'waiting') renderWaiting(room);
+  else if (room.status === 'countdown' && !countdownDone) { countdownDone=true; doCountdown(room); }
+  else if (room.status === 'playing' && !gameDone) { gameDone=true; beginGame(room); }
+  else if (room.status === 'playing') renderProgress(room.players);
+  else if (room.status === 'ended' && !resultsDone) { resultsDone=true; showResults(room); }
+}
+
+function renderWaiting(room) {
+  const players = room.players || {};
+  const sorted = Object.entries(players).sort((a,b)=>a[1].joinedAt-b[1].joinedAt);
+  $('player-count').textContent = `${sorted.length}/6`;
+  $('player-grid').innerHTML = sorted.map(([id,p])=>`
+    <div class="player-row">
+      <div class="player-dot" style="background:${p.color}"></div>
+      <div class="player-name-text">${p.name}</div>
+      ${room.host===id?'<span class="host-badge">방장</span>':''}
+      ${id===myId?'<span class="me-badge">나</span>':''}
+    </div>`).join('');
+  if (isHost) $('btn-start').disabled = sorted.length < 2;
+}
+
+async function startGame() {
+  await sb.from('rooms').update({ status:'countdown' }).eq('code', roomCode);
+}
+
+function doCountdown() {
+  showPage('page-countdown');
+  let n=3; $('cd-num').textContent=n;
+  const iv = setInterval(async()=>{
+    n--;
+    if(n<=0){ clearInterval(iv); $('cd-num').textContent='GO!'; if(isHost) await sb.from('rooms').update({ status:'playing', started_at: new Date().toISOString() }).eq('code',roomCode); }
+    else $('cd-num').textContent=n;
+  },1000);
+}
+
+// ── Game ──
+function beginGame(room) {
+  currentSentence = room.sentence || SENTENCES[0];
+  myTyped=0; myErrors=0; myStartTime=Date.now();
+  gameActive=true;
+  $('typing-input').value='';
+  $('typing-input').disabled=false;
+  showPage('page-game');
+  renderSentence('');
+  renderProgress(room.players);
+
+  // Timer
+  let secs = GAME_SECS;
+  $('timer-bar').style.width='100%';
+  $('stat-time').textContent=secs;
+  gameTimerInterval = setInterval(async()=>{
+    secs--;
+    $('stat-time').textContent=secs;
+    $('timer-bar').style.width=(secs/GAME_SECS*100)+'%';
+    if(secs<=0){
+      clearInterval(gameTimerInterval);
+      gameActive=false;
+      $('typing-input').disabled=true;
+      await flushProgress(true);
+      if(isHost) await sb.from('rooms').update({ status:'ended' }).eq('code',roomCode);
+    }
+  },1000);
+
+  setTimeout(()=>$('typing-input').focus(), 100);
+}
+
+function renderSentence(typed) {
+  const s = currentSentence;
+  let html = '';
+  for(let i=0; i<s.length; i++){
+    if(i < typed.length){
+      if(typed[i]===s[i]) html+=`<span class="char-done">${s[i]}</span>`;
+      else html+=`<span class="char-wrong">${s[i]}</span>`;
+    } else if(i===typed.length){
+      html+=`<span class="char-cursor">${s[i]}</span>`;
+    } else {
+      html+=`<span class="char-pending">${s[i]}</span>`;
+    }
+  }
+  $('sentence-display').innerHTML = html;
+}
+
+async function handleTyping(e) {
+  if(!gameActive) return;
+  const typed = e.target.value;
+  const s = currentSentence;
+
+  // Check errors
+  let errors=0;
+  for(let i=0; i<typed.length; i++){ if(typed[i]!==s[i]) errors++; }
+  myErrors=errors;
+
+  // Wrong input style
+  const hasError = errors > 0;
+  $('typing-input').classList.toggle('error', hasError);
+
+  renderSentence(typed);
+
+  // WPM
+  const elapsed = (Date.now()-myStartTime)/60000;
+  const wpm = elapsed>0 ? Math.round((typed.length/5)/elapsed) : 0;
+  $('stat-wpm').textContent = wpm;
+
+  // Accuracy
+  const total = typed.length;
+  const acc = total>0 ? Math.round(((total-errors)/total)*100) : 100;
+  $('stat-acc').textContent = acc+'%';
+
+  // Progress
+  const progress = Math.round((typed.length/s.length)*100);
+  myTyped = typed.length;
+
+  // Done?
+  if(typed === s){
+    gameActive=false;
+    clearInterval(gameTimerInterval);
+    $('typing-input').disabled=true;
+    toast('🎉 완료!');
+    await flushProgress(true, wpm);
+    if(isHost) await sb.from('rooms').update({ status:'ended' }).eq('code',roomCode);
+    return;
+  }
+
+  // Throttled flush
+  if(myTyped%8===0) flushProgress(false, wpm);
+}
+
+async function flushProgress(done=false, wpm=0) {
+  const { data } = await sb.from('rooms').select('players').eq('code',roomCode).single();
+  if(!data) return;
+  const players = data.players||{};
+  if(players[myId]){
+    const s=currentSentence;
+    const elapsed=(Date.now()-myStartTime)/60000;
+    const calcWpm=elapsed>0?Math.round((myTyped/5)/elapsed):wpm;
+    players[myId].progress=Math.round((myTyped/s.length)*100);
+    players[myId].wpm=calcWpm;
+    players[myId].done=done;
+    await sb.from('rooms').update({ players }).eq('code',roomCode);
+  }
+}
+
+function renderProgress(players) {
+  if(!players) return;
+  const sorted=Object.entries(players).sort((a,b)=>b[1].progress-a[1].progress);
+  $('progress-list').innerHTML=sorted.map(([id,p])=>`
+    <div class="progress-row">
+      <div class="prog-name" style="color:${p.color}">${p.name}${id===myId?' ★':''}</div>
+      <div class="prog-bar-wrap"><div class="prog-bar" style="width:${p.progress||0}%;background:${p.color}"></div></div>
+      <div class="prog-pct">${p.progress||0}%</div>
+    </div>`).join('');
+}
+
+// ── Results ──
+async function showResults(room) {
+  clearInterval(gameTimerInterval);
+  await flushProgress(true);
+  const { data } = await sb.from('rooms').select('players,sentence').eq('code',roomCode).single();
+  const players = (data&&data.players)||room.players||{};
+  const sorted=Object.entries(players).sort((a,b)=>{
+    if(b[1].done!==a[1].done) return b[1].done-a[1].done;
+    return b[1].wpm-a[1].wpm;
+  });
+  const winner=sorted[0];
+  $('result-trophy').textContent = winner[0]===myId?'🏆':'🎯';
+  $('result-title').textContent = winner[0]===myId?'우승했어요!':winner[1].name+' 우승!';
+  $('result-sub').textContent = `문장: "${currentSentence||room.sentence}"`;
+  const ranks=['🥇','🥈','🥉'];
+  $('result-list').innerHTML=sorted.map(([id,p],i)=>`
+    <div class="result-card${i===0?' winner':''}">
+      <div class="result-rank">${ranks[i]||(i+1)}</div>
+      <div class="result-info">
+        <div class="result-name" style="color:${p.color}">${p.name}${id===myId?' (나)':''}</div>
+        <div class="result-detail">진행률 ${p.progress||0}% ${p.done?'· 완료':''}</div>
+      </div>
+      <div class="result-wpm">${p.wpm||0}<span> 타/분</span></div>
+    </div>`).join('');
+  showPage('page-results');
+}
+
+// ── Leave / Reset ──
+async function leaveRoom() {
+  if(subscription) sb.removeChannel(subscription);
+  const { data }=await sb.from('rooms').select('players').eq('code',roomCode).single();
+  if(data){
+    const players=data.players||{};
+    delete players[myId];
+    if(Object.keys(players).length===0||isHost) await sb.from('rooms').delete().eq('code',roomCode);
+    else await sb.from('rooms').update({ players }).eq('code',roomCode);
+  }
+  resetState(); showPage('page-lobby');
+}
+
+async function playAgain() {
+  countdownDone=false; gameDone=false; resultsDone=false;
+  gameActive=false; clearInterval(gameTimerInterval);
+  const newSentence=SENTENCES[Math.floor(Math.random()*SENTENCES.length)];
+  const { data }=await sb.from('rooms').select('players').eq('code',roomCode).single();
+  if(data){
+    const players=data.players||{};
+    Object.keys(players).forEach(id=>{ players[id].progress=0; players[id].wpm=0; players[id].done=false; });
+    await sb.from('rooms').update({ status:'waiting', sentence:newSentence, players }).eq('code',roomCode);
+  }
+  $('typing-input').value=''; $('typing-input').disabled=false;
+  $('timer-bar').style.width='100%';
+  enterWaiting();
+}
+
+function goMenu() {
+  if(subscription) sb.removeChannel(subscription);
+  resetState(); showPage('page-lobby');
+}
+
+function resetState() {
+  clearInterval(gameTimerInterval);
+  roomCode=null; isHost=false; gameActive=false;
+  myTyped=0; myErrors=0; myStartTime=null;
+  countdownDone=false; gameDone=false; resultsDone=false;
+  $('typing-input').value=''; $('typing-input').disabled=false;
+  $('code-input').value=''; $('join-error').classList.remove('show');
+  myId='u_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+}
+</script>
+</body>
+</html>
