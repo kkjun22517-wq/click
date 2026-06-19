@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>타자배틀</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg:#0e0e14; --surface:#16161f; --surface2:#1e1e2e; --border:#2a2a3e;
+      --accent:#7c6fff; --accent2:#ff6f9c; --green:#4fffb0; --yellow:#ffe66d; --orange:#ff9f43;
+      --text:#e8e8f0; --muted:#6b6b8a; --radius:10px;
+      --font:'Noto Sans KR',sans-serif; --mono:'JetBrains Mono',monospace;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+    header{width:100%;padding:14px 28px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+    .logo{font-size:1.3rem;font-weight:900;letter-spacing:-0.03em}
+    .logo span{color:var(--accent)}.logo em{color:var(--accent2);font-style:normal}
+    .page{display:none;width:100%;max-width:720px;padding:36px 20px}
+    .page.active{display:flex;flex-direction:column;align-items:center}
+    /* Hero */
+    .hero{font-size:clamp(3rem,10vw,5.5rem);font-weight:900;text-align:center;letter-spacing:-0.04em;line-height:1;margin-bottom:8px}
+    .hero span{color:var(--accent)}.hero em{color:var(--accent2);font-style:normal}
+    .hero-sub{color:var(--muted);font-size:.9rem;text-align:center;margin-bottom:32px}
+    /* Cards */
+    .card{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:12px}
+    .card h2{font-size:.85rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+    label{font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:6px}
+    input[type="text"]{width:100%;padding:11px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font);font-size:1rem;outline:none;transition:border-color .15s;margin-bottom:10px}
+    input[type="text"]:focus{border-color:var(--accent)}
+    /* Buttons */
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 22px;border-radius:var(--radius);font-family:var(--font);font-size:.9rem;font-weight:700;cursor:pointer;border:none;transition:opacity .15s,transform .08s;width:100%}
+    .btn:active{transform:scale(.98)}.btn:disabled{opacity:.4;cursor:not-allowed}
+    .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover:not(:disabled){opacity:.9}
+    .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);margin-top:8px}
+    .btn-secondary:hover{border-color:var(--accent)}
+    .btn-danger{background:var(--accent2);color:#fff;margin-top:8px}
+    .btn-sm{padding:8px 16px;font-size:.8rem;width:auto}
+    /* Mode selector */
+    .mode-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px}
+    .mode-card{padding:14px 10px;background:var(--surface2);border:2px solid var(--border);border-radius:var(--radius);cursor:pointer;text-align:center;transition:border-color .15s,background .15s}
+    .mode-card:hover{border-color:var(--accent)}
+    .mode-card.selected{border-color:var(--accent);background:#1a1730}
+    .mode-icon{font-size:1.6rem;margin-bottom:6px}
+    .mode-name{font-size:.82rem;font-weight:700}
+    .mode-desc{font-size:.68rem;color:var(--muted);margin-top:3px}
+    /* Divider */
+    .divider{display:flex;align-items:center;gap:10px;margin:10px 0;color:var(--muted);font-size:.7rem;font-weight:700;letter-spacing:.1em}
+    .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
+    .error-msg{color:var(--accent2);font-size:.78rem;margin-top:-6px;margin-bottom:8px;display:none}
+    .error-msg.show{display:block}
+    /* Waiting */
+    .room-code-box{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;text-align:center;margin-bottom:16px}
+    .room-code-label{font-size:.68rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+    .room-code-value{font-family:var(--mono);font-size:2.6rem;font-weight:700;color:var(--accent);letter-spacing:.2em}
+    .mode-badge{display:inline-block;padding:4px 12px;border-radius:99px;font-size:.72rem;font-weight:700;margin-bottom:14px}
+    .player-grid{display:flex;flex-direction:column;gap:7px;margin-bottom:14px}
+    .player-row{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)}
+    .player-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+    .player-name-text{font-weight:500;flex:1;font-size:.9rem}
+    .badge{font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:99px}
+    .badge-host{background:var(--accent);color:#fff}
+    .badge-me{background:var(--surface);border:1px solid var(--border);color:var(--muted)}
+    .wait-note{text-align:center;color:var(--muted);font-size:.82rem;margin-bottom:14px}
+    .dots::after{content:'';animation:dots 1.2s steps(4,end) infinite}
+    @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+    /* Countdown */
+    .cd-wrap{text-align:center}
+    .cd-label{font-size:.78rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+    .cd-num{font-size:9rem;font-weight:900;line-height:1;color:var(--accent);letter-spacing:-0.04em}
+    .cd-mode{margin-top:14px;font-size:.85rem;color:var(--muted)}
+    /* Game */
+    .game-hud{width:100%;display:flex;align-items:center;gap:14px;margin-bottom:16px}
+    .hud-stat{text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;flex:1}
+    .hud-val{font-family:var(--mono);font-size:1.3rem;font-weight:700;color:var(--accent)}
+    .hud-val.danger{color:var(--accent2)}
+    .hud-label{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+    .timer-bar-wrap{width:100%;height:5px;background:var(--border);border-radius:99px;margin-bottom:14px;overflow:hidden}
+    .timer-bar{height:100%;border-radius:99px;transition:width 1s linear}
+    .progress-list{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+    .progress-row{display:flex;align-items:center;gap:8px;font-size:.8rem}
+    .prog-name{min-width:65px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+    .prog-bar-wrap{flex:1;height:7px;background:var(--border);border-radius:99px;overflow:hidden}
+    .prog-bar{height:100%;border-radius:99px;transition:width .3s}
+    .prog-val{font-family:var(--mono);font-size:.72rem;color:var(--muted);min-width:32px;text-align:right}
+    /* Sentence */
+    .sentence-box{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;margin-bottom:12px;font-size:1.25rem;line-height:1.9;letter-spacing:.02em;word-break:keep-all;min-height:80px}
+    .char-done{color:var(--green)}
+    .char-wrong{color:var(--accent2);text-decoration:underline}
+    .char-cursor{background:var(--accent);color:#fff;border-radius:2px}
+    .char-pending{color:var(--muted)}
+    /* Marathon: sentence queue */
+    .sentence-counter{font-family:var(--mono);font-size:.75rem;color:var(--muted);margin-bottom:8px;text-align:right}
+    .prev-sentence{opacity:.35;font-size:.9rem;margin-bottom:4px;word-break:keep-all}
+    /* Input */
+    .typing-input{width:100%;padding:13px 16px;background:var(--surface2);border:2px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font);font-size:1.05rem;outline:none;transition:border-color .15s;margin-bottom:10px}
+    .typing-input:focus{border-color:var(--accent)}
+    .typing-input.error{border-color:var(--accent2)}
+    .typing-input:disabled{opacity:.5}
+    /* Results */
+    .result-trophy{font-size:3rem;text-align:center;margin-bottom:6px}
+    .result-title{font-size:2.2rem;font-weight:900;text-align:center;letter-spacing:-0.03em;margin-bottom:4px}
+    .result-sub{color:var(--muted);text-align:center;font-size:.82rem;margin-bottom:24px}
+    .result-list{width:100%;display:flex;flex-direction:column;gap:9px;margin-bottom:20px}
+    .result-card{display:flex;align-items:center;gap:14px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+    .result-card.winner{border-color:var(--accent);background:#1a1730}
+    .result-rank{font-size:1.6rem;min-width:36px}
+    .result-info{flex:1}
+    .result-name{font-weight:700;font-size:.95rem}
+    .result-detail{font-size:.72rem;color:var(--muted);margin-top:2px}
+    .result-score{font-family:var(--mono);font-size:1.5rem;font-weight:700;color:var(--accent);text-align:right}
+    .result-score span{font-size:.65rem;color:var(--muted);display:block}
+    .gap-row{display:flex;gap:10px;width:100%}
+    .gap-row .btn{flex:1}
+    /* Toast */
+    #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 18px;border-radius:99px;font-size:.82rem;font-weight:500;opacity:0;transition:opacity .2s;pointer-events:none;z-index:999;white-space:nowrap}
+    #toast.show{opacity:1}
+    @media(max-width:500px){.mode-grid{grid-template-columns:1fr}.sentence-box{font-size:1.05rem}.hero{font-size:3rem}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">타자<span>배</span><em>틀</em></div>
+</header>
+
+<!-- LOBBY -->
+<div class="page active" id="page-lobby">
+  <div class="hero">타자<br><span>배</span><em>틀</em></div>
+  <p class="hero-sub">친구와 함께하는 실시간 한글 타자 대결</p>
+
+  <div class="card" style="max-width:460px">
+    <h2>게임 모드 선택</h2>
+    <div class="mode-grid" id="mode-grid">
+      <div class="mode-card selected" data-mode="classic">
+        <div class="mode-icon">🎯</div>
+        <div class="mode-name">클래식</div>
+        <div class="mode-desc">한 문장 완성 대결</div>
+      </div>
+      <div class="mode-card" data-mode="marathon">
+        <div class="mode-icon">🏃</div>
+        <div class="mode-name">마라톤</div>
+        <div class="mode-desc">60초 최다 문장</div>
+      </div>
+      <div class="mode-card" data-mode="speed">
+        <div class="mode-icon">⚡</div>
+        <div class="mode-name">스피드</div>
+        <div class="mode-desc">15초 초고속 대결</div>
+      </div>
+    </div>
+    <h2>참가하기</h2>
+    <label for="nickname">닉네임</label>
+    <input type="text" id="nickname" placeholder="나의 닉네임" maxlength="10" autocomplete="off"/>
+    <button class="btn btn-primary" id="btn-create">방 만들기</button>
+    <div class="divider">또는</div>
+    <label for="code-input">방 코드</label>
+    <input type="text" id="code-input" placeholder="6자리 코드" maxlength="6" autocomplete="off" style="text-transform:uppercase;letter-spacing:.15em"/>
+    <span class="error-msg" id="join-error">방을 찾을 수 없습니다.</span>
+    <button class="btn btn-secondary" id="btn-join">방 참가하기</button>
+  </div>
+</div>
+
+<!-- WAITING -->
+<div class="page" id="page-wait">
+  <div class="room-code-box" style="max-width:460px;width:100%">
+    <div class="room-code-label">방 코드 — 친구에게 공유하세요</div>
+    <div class="room-code-value" id="display-code">------</div>
+  </div>
+  <div class="card" style="max-width:460px">
+    <div style="text-align:center;margin-bottom:14px">
+      <span class="mode-badge" id="wait-mode-badge"></span>
+    </div>
+    <h2>참가자 <span id="player-count" style="color:var(--accent)">0/6</span></h2>
+    <div class="player-grid" id="player-grid"></div>
+    <p class="wait-note">친구를 기다리는 중<span class="dots"></span></p>
+    <div id="host-ctrl" style="display:none">
+      <button class="btn btn-primary" id="btn-start" disabled>게임 시작 (최소 2명)</button>
+    </div>
+    <button class="btn btn-danger" id="btn-leave">나가기</button>
+  </div>
+</div>
+
+<!-- COUNTDOWN -->
+<div class="page" id="page-countdown">
+  <div class="cd-wrap">
+    <div class="cd-label">게임 시작까지</div>
+    <div class="cd-num" id="cd-num">3</div>
+    <div class="cd-mode" id="cd-mode-label"></div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div class="page" id="page-game">
+  <div class="timer-bar-wrap"><div class="timer-bar" id="timer-bar" style="background:var(--accent)"></div></div>
+  <div class="game-hud">
+    <div class="hud-stat"><div class="hud-val" id="hud-time">60</div><div class="hud-label">남은 시간</div></div>
+    <div class="hud-stat"><div class="hud-val" id="hud-wpm">0</div><div class="hud-label">타/분</div></div>
+    <div class="hud-stat"><div class="hud-val" id="hud-acc">100%</div><div class="hud-label">정확도</div></div>
+    <div class="hud-stat" id="hud-extra-wrap"><div class="hud-val" id="hud-extra">0</div><div class="hud-label" id="hud-extra-label">문장 수</div></div>
+  </div>
+  <div class="progress-list" id="progress-list"></div>
+  <div class="prev-sentence" id="prev-sentence" style="display:none"></div>
+  <div class="sentence-counter" id="sentence-counter" style="display:none"></div>
+  <div class="sentence-box" id="sentence-display"></div>
+  <input type="text" class="typing-input" id="typing-input" placeholder="여기에 타이핑하세요..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+</div>
+
+<!-- RESULTS -->
+<div class="page" id="page-results">
+  <div class="result-trophy" id="result-trophy">🏆</div>
+  <div class="result-title" id="result-title">결과</div>
+  <div class="result-sub" id="result-sub"></div>
+  <div class="result-list" id="result-list"></div>
+  <div class="gap-row">
+    <button class="btn btn-primary" id="btn-again">다시 하기</button>
+    <button class="btn btn-secondary" id="btn-menu">메인으로</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script>
+const SUPABASE_URL='https://tbhnzmdhvegetzhlaxyq.supabase.co';
+const SUPABASE_KEY='sb_publishable_YyBI9uTOCaqZG7MAAzuJxA_Sma5O0Ia';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+// ── 문장 데이터 ──
+const SENTENCES_NORMAL=[
+  '다람쥐 헌 쳇바퀴에 타고파','키보드를 빠르게 치는 연습을 해봅시다',
+  '하늘을 나는 파란 새가 노래를 부릅니다','봄바람이 살랑살랑 불어오는 따뜻한 오후',
+  '세상에서 가장 빠른 타자왕이 되어보자','오늘도 열심히 타자 연습을 하는 나는 최고',
+  '파란 하늘 아래 하얀 구름이 두둥실 떠갑니다','빠른 손가락으로 정확하게 타이핑해 봅시다',
+  '컴퓨터 자판을 보지 않고 칠 수 있도록 연습하자','친구들과 함께하는 타자 게임은 정말 재미있어요',
+  '맛있는 음식을 먹으면 기분이 좋아진다','가나다라마바사아자차카타파하 순서대로 외워보자',
+];
+const SENTENCES_SPEED=[
+  '안녕하세요','반갑습니다','빠른 타자','하늘 높이','달려가자','힘내세요',
+  '좋은 하루','파이팅','열심히','최고다','도전해','빛나는 별','맑은 하늘',
+];
+const MODES={
+  classic:{name:'클래식',icon:'🎯',color:'var(--accent)',secs:60,desc:'한 문장을 가장 먼저 완성하면 우승!'},
+  marathon:{name:'마라톤',icon:'🏃',color:'var(--green)',secs:60,desc:'60초 동안 문장을 최대한 많이 완성하세요!'},
+  speed:{name:'스피드',icon:'⚡',color:'var(--yellow)',secs:15,desc:'15초 안에 짧은 문장을 초고속으로!'},
+};
+
+const COLORS=['#7c6fff','#ff6f9c','#4fffb0','#ffe66d','#ff9f43','#48dbfb'];
+const $=id=>document.getElementById(id);
+const showPage=id=>{document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$(id).classList.add('active');};
+function toast(msg,dur=2200){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+function randCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from({length:6},()=>c[Math.random()*c.length|0]).join('');}
+function shuffle(arr){return [...arr].sort(()=>Math.random()-.5);}
+
+// ── State ──
+let myId='u_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+let roomCode=null,isHost=false,selectedMode='classic';
+let currentSentence='',sentenceQueue=[],sentenceIndex=0;
+let myTyped=0,myErrors=0,myStartTime=null,mySentencesDone=0;
+let gameActive=false,gameTimerInterval=null,subscription=null;
+let countdownDone=false,gameDone=false,resultsDone=false;
+
+// ── Mode selector ──
+document.querySelectorAll('.mode-card').forEach(card=>{
+  card.onclick=()=>{
+    document.querySelectorAll('.mode-card').forEach(c=>c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedMode=card.dataset.mode;
+  };
+});
+
+// ── Buttons ──
+$('btn-create').onclick=createRoom;
+$('btn-join').onclick=joinRoom;
+$('code-input').addEventListener('keydown',e=>{if(e.key==='Enter')joinRoom();});
+$('nickname').addEventListener('keydown',e=>{if(e.key==='Enter')createRoom();});
+$('btn-start').onclick=startGame;
+$('btn-leave').onclick=leaveRoom;
+$('typing-input').addEventListener('input',handleTyping);
+$('typing-input').addEventListener('keydown',handleKeydown);
+$('btn-again').onclick=playAgain;
+$('btn-menu').onclick=goMenu;
+
+// ── Create ──
+async function createRoom(){
+  const nick=$('nickname').value.trim();
+  if(!nick){toast('닉네임을 입력하세요');return;}
+  roomCode=randCode(); isHost=true;
+  const mode=selectedMode;
+  const pool=mode==='speed'?SENTENCES_SPEED:SENTENCES_NORMAL;
+  const sentences=shuffle(pool);
+  const players={[myId]:{name:nick,color:COLORS[0],progress:0,wpm:0,done:false,sentences_done:0,joinedAt:Date.now()}};
+  const{error}=await sb.from('rooms').insert({code:roomCode,host:myId,status:'waiting',sentence:sentences[0],sentences:JSON.stringify(sentences),game_mode:mode,players});
+  if(error){toast('오류: '+error.message);console.error(error);return;}
+  enterWaiting();
+}
+
+// ── Join ──
+async function joinRoom(){
+  const nick=$('nickname').value.trim();
+  const code=$('code-input').value.trim().toUpperCase();
+  $('join-error').classList.remove('show');
+  if(!nick){toast('닉네임을 입력하세요');return;}
+  if(code.length!==6){toast('방 코드 6자리를 입력하세요');return;}
+  const{data,error}=await sb.from('rooms').select('*').eq('code',code).single();
+  if(error||!data){$('join-error').classList.add('show');return;}
+  if(data.status!=='waiting'){toast('이미 게임이 시작됐습니다');return;}
+  const players=data.players||{};
+  const count=Object.keys(players).length;
+  if(count>=6){toast('방이 꽉 찼습니다');return;}
+  players[myId]={name:nick,color:COLORS[count%COLORS.length],progress:0,wpm:0,done:false,sentences_done:0,joinedAt:Date.now()};
+  roomCode=code; isHost=false;
+  await sb.from('rooms').update({players}).eq('code',roomCode);
+  enterWaiting();
+}
+
+// ── Waiting ──
+function enterWaiting(){
+  $('display-code').textContent=roomCode;
+  $('host-ctrl').style.display=isHost?'block':'none';
+  showPage('page-wait');
+  subscribe();
+}
+
+function subscribe(){
+  if(subscription)sb.removeChannel(subscription);
+  subscription=sb.channel('typing-'+roomCode)
+    .on('postgres_changes',{event:'*',schema:'public',table:'rooms',filter:`code=eq.${roomCode}`},payload=>{
+      handleUpdate(payload.new);
+    }).subscribe();
+}
+
+function handleUpdate(room){
+  if(!room)return;
+  if(room.status==='waiting')renderWaiting(room);
+  else if(room.status==='countdown'&&!countdownDone){countdownDone=true;doCountdown(room);}
+  else if(room.status==='playing'&&!gameDone){gameDone=true;beginGame(room);}
+  else if(room.status==='playing')renderProgress(room.players,room.game_mode);
+  else if(room.status==='ended'&&!resultsDone){resultsDone=true;showResults(room);}
+}
+
+function renderWaiting(room){
+  const mode=room.game_mode||'classic';
+  const m=MODES[mode];
+  const badge=$('wait-mode-badge');
+  badge.textContent=m.icon+' '+m.name+' 모드';
+  badge.style.cssText=`background:${m.color}22;color:${m.color};border:1px solid ${m.color}55;border-radius:99px;padding:4px 14px;font-size:.75rem;font-weight:700`;
+  const players=room.players||{};
+  const sorted=Object.entries(players).sort((a,b)=>a[1].joinedAt-b[1].joinedAt);
+  $('player-count').textContent=`${sorted.length}/6`;
+  $('player-grid').innerHTML=sorted.map(([id,p])=>`
+    <div class="player-row">
+      <div class="player-dot" style="background:${p.color}"></div>
+      <div class="player-name-text">${p.name}</div>
+      ${room.host===id?'<span class="badge badge-host">방장</span>':''}
+      ${id===myId?'<span class="badge badge-me">나</span>':''}
+    </div>`).join('');
+  if(isHost)$('btn-start').disabled=sorted.length<2;
+}
+
+async function startGame(){
+  await sb.from('rooms').update({status:'countdown'}).eq('code',roomCode);
+}
+
+function doCountdown(room){
+  const mode=room.game_mode||'classic';
+  const m=MODES[mode];
+  $('cd-mode-label').innerHTML=`${m.icon} <b>${m.name}</b> — ${m.desc}`;
+  showPage('page-countdown');
+  let n=3; $('cd-num').textContent=n;
+  const iv=setInterval(async()=>{
+    n--;
+    if(n<=0){clearInterval(iv);$('cd-num').textContent='GO!';if(isHost)await sb.from('rooms').update({status:'playing',started_at:new Date().toISOString()}).eq('code',roomCode);}
+    else $('cd-num').textContent=n;
+  },1000);
+}
+
+// ── Game ──
+function beginGame(room){
+  const mode=room.game_mode||'classic';
+  const m=MODES[mode];
+  const allSentences=JSON.parse(room.sentences||'[]');
+
+  // Setup sentence queue
+  sentenceQueue=allSentences;
+  sentenceIndex=0;
+  currentSentence=sentenceQueue[0]||SENTENCES_NORMAL[0];
+  mySentencesDone=0;
+  myTyped=0; myErrors=0; myStartTime=Date.now();
+  gameActive=true;
+  _cachedMode=mode;
+
+  // HUD setup
+  $('hud-extra-wrap').style.display=mode==='marathon'?'':'none';
+  if(mode==='marathon'){$('hud-extra-label').textContent='문장 수';}
+  $('sentence-counter').style.display=mode==='marathon'?'block':'none';
+  $('prev-sentence').style.display='none';
+
+  $('typing-input').value='';
+  $('typing-input').disabled=false;
+  $('timer-bar').style.background=m.color;
+  renderSentence('');
+  renderProgress(room.players,mode);
+  showPage('page-game');
+
+  // Timer
+  let secs=m.secs;
+  $('hud-time').textContent=secs;
+  $('timer-bar').style.width='100%';
+  gameTimerInterval=setInterval(async()=>{
+    secs--;
+    $('hud-time').textContent=secs;
+    $('hud-time').classList.toggle('danger',secs<=10);
+    $('timer-bar').style.width=(secs/m.secs*100)+'%';
+    if(secs<=0){
+      clearInterval(gameTimerInterval);
+      gameActive=false;
+      $('typing-input').disabled=true;
+      await flushProgress(true);
+      if(isHost)await sb.from('rooms').update({status:'ended'}).eq('code',roomCode);
+    }
+  },1000);
+
+  setTimeout(()=>$('typing-input').focus(),100);
+}
+
+function renderSentence(typed){
+  const s=currentSentence;
+  let html='';
+  for(let i=0;i<s.length;i++){
+    if(i<typed.length){
+      if(typed[i]===s[i])html+=`<span class="char-done">${s[i]==' '?'&nbsp;':s[i]}</span>`;
+      else html+=`<span class="char-wrong">${s[i]==' '?'&nbsp;':s[i]}</span>`;
+    }else if(i===typed.length){
+      html+=`<span class="char-cursor">${s[i]==' '?'&nbsp;':s[i]}</span>`;
+    }else{
+      html+=`<span class="char-pending">${s[i]==' '?'&nbsp;':s[i]}</span>`;
+    }
+  }
+  $('sentence-display').innerHTML=html;
+}
+
+async function handleTyping(e){
+  if(!gameActive)return;
+  const typed=e.target.value;
+  const s=currentSentence;
+  let errors=0;
+  for(let i=0;i<typed.length;i++){if(typed[i]!==s[i])errors++;}
+  myErrors=errors;
+  $('typing-input').classList.toggle('error',errors>0);
+  renderSentence(typed);
+
+  // Stats
+  const elapsed=(Date.now()-myStartTime)/60000;
+  const totalChars=mySentencesDone>0?sentenceQueue.slice(0,mySentencesDone).join('').length+typed.length:typed.length;
+  const wpm=elapsed>0?Math.round((totalChars/5)/elapsed):0;
+  $('hud-wpm').textContent=wpm;
+  const acc=typed.length>0?Math.round(((typed.length-errors)/typed.length)*100):100;
+  $('hud-acc').textContent=acc+'%';
+  myTyped=typed.length;
+
+  // Classic/Speed: 문장 완성 시 자동 처리
+  if((typed===s) && (await getMode())!=='marathon'){
+    const mode=await getMode();
+    gameActive=false;
+    clearInterval(gameTimerInterval);
+    $('typing-input').disabled=true;
+    toast('🎉 완료!');
+    await flushProgress(true,wpm);
+    if(isHost)await sb.from('rooms').update({status:'ended'}).eq('code',roomCode);
+    return;
+  }
+
+  if(myTyped%8===0)flushProgress(false,wpm);
+}
+
+// ── 모드 캐시 ──
+let _cachedMode=null;
+async function getMode(){
+  if(_cachedMode)return _cachedMode;
+  const{data}=await sb.from('rooms').select('game_mode').eq('code',roomCode).single();
+  _cachedMode=data?.game_mode||'classic';
+  return _cachedMode;
+}
+
+// ── 엔터키 핸들러 (마라톤 전용) ──
+async function handleKeydown(e){
+  if(!gameActive)return;
+  const mode=await getMode();
+  if(mode!=='marathon')return;
+  if(e.key!=='Enter')return;
+  e.preventDefault();
+
+  const typed=$('typing-input').value;
+  const s=currentSentence;
+
+  // 오타 있으면 엔터 무시
+  if(typed!==s){
+    toast('⚠️ 문장을 정확히 입력하세요',1000);
+    return;
+  }
+
+  mySentencesDone++;
+  $('hud-extra').textContent=mySentencesDone;
+
+  sentenceIndex++;
+  if(sentenceIndex>=sentenceQueue.length){
+    sentenceIndex=0;
+    sentenceQueue=shuffle(sentenceQueue);
+  }
+  const prevSent=currentSentence;
+  currentSentence=sentenceQueue[sentenceIndex];
+
+  // 입력창 완전히 초기화
+  $('typing-input').value='';
+  $('typing-input').classList.remove('error');
+  myTyped=0; myErrors=0;
+
+  $('prev-sentence').style.display='block';
+  $('prev-sentence').textContent='✓ '+prevSent;
+  $('sentence-counter').textContent=`${mySentencesDone}문장 완료`;
+  renderSentence('');
+  toast('✅ 다음 문장!',900);
+
+  const elapsed=(Date.now()-myStartTime)/60000;
+  const wpm=elapsed>0?Math.round((mySentencesDone*10)/elapsed):0;
+  await flushProgress(false,wpm);
+
+async function flushProgress(done=false,wpm=0){
+  const{data}=await sb.from('rooms').select('players').eq('code',roomCode).single();
+  if(!data)return;
+  const players=data.players||{};
+  if(players[myId]){
+    const elapsed=(Date.now()-myStartTime)/60000;
+    const calcWpm=elapsed>0?Math.round((myTyped/5)/elapsed):wpm;
+    players[myId].progress=Math.round((myTyped/currentSentence.length)*100);
+    players[myId].wpm=calcWpm;
+    players[myId].done=done;
+    players[myId].sentences_done=mySentencesDone;
+    await sb.from('rooms').update({players}).eq('code',roomCode);
+  }
+}
+
+function renderProgress(players,mode){
+  if(!players)return;
+  const sorted=Object.entries(players).sort((a,b)=>{
+    if(mode==='marathon')return b[1].sentences_done-a[1].sentences_done;
+    return b[1].progress-a[1].progress;
+  });
+  $('progress-list').innerHTML=sorted.map(([id,p])=>{
+    const val=mode==='marathon'?(p.sentences_done||0)+'문장':((p.progress||0)+'%');
+    const pct=mode==='marathon'?Math.min((p.sentences_done||0)*10,100):(p.progress||0);
+    return`<div class="progress-row">
+      <div class="prog-name" style="color:${p.color}">${p.name}${id===myId?' ★':''}</div>
+      <div class="prog-bar-wrap"><div class="prog-bar" style="width:${pct}%;background:${p.color}"></div></div>
+      <div class="prog-val">${val}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Results ──
+async function showResults(room){
+  clearInterval(gameTimerInterval);
+  await flushProgress(true);
+  const{data}=await sb.from('rooms').select('players,game_mode').eq('code',roomCode).single();
+  const players=(data&&data.players)||room.players||{};
+  const mode=data?.game_mode||room.game_mode||'classic';
+  const m=MODES[mode];
+
+  const sorted=Object.entries(players).sort((a,b)=>{
+    if(mode==='marathon')return b[1].sentences_done-a[1].sentences_done;
+    if(b[1].done!==a[1].done)return b[1].done-a[1].done;
+    return b[1].wpm-a[1].wpm;
+  });
+  const winner=sorted[0];
+  $('result-trophy').textContent=winner[0]===myId?'🏆':'🎯';
+  $('result-title').textContent=winner[0]===myId?'우승했어요!':winner[1].name+' 우승!';
+  $('result-sub').textContent=`${m.icon} ${m.name} 모드 결과`;
+
+  const ranks=['🥇','🥈','🥉'];
+  $('result-list').innerHTML=sorted.map(([id,p],i)=>{
+    const scoreVal=mode==='marathon'?(p.sentences_done||0):(p.wpm||0);
+    const scoreLabel=mode==='marathon'?'문장':'타/분';
+    return`<div class="result-card${i===0?' winner':''}">
+      <div class="result-rank">${ranks[i]||(i+1)}</div>
+      <div class="result-info">
+        <div class="result-name" style="color:${p.color}">${p.name}${id===myId?' (나)':''}</div>
+        <div class="result-detail">${mode!=='marathon'?`정확도 진행률 ${p.progress||0}% ${p.done?'· 완료':''}`:''}</div>
+      </div>
+      <div class="result-score">${scoreVal}<span>${scoreLabel}</span></div>
+    </div>`;
+  }).join('');
+  showPage('page-results');
+}
+
+// ── Leave / Reset ──
+async function leaveRoom(){
+  if(subscription)sb.removeChannel(subscription);
+  const{data}=await sb.from('rooms').select('players').eq('code',roomCode).single();
+  if(data){
+    const players=data.players||{};
+    delete players[myId];
+    if(Object.keys(players).length===0||isHost)await sb.from('rooms').delete().eq('code',roomCode);
+    else await sb.from('rooms').update({players}).eq('code',roomCode);
+  }
+  resetState();showPage('page-lobby');
+}
+
+async function playAgain(){
+  countdownDone=false;gameDone=false;resultsDone=false;
+  gameActive=false;clearInterval(gameTimerInterval);
+  const{data}=await sb.from('rooms').select('game_mode').eq('code',roomCode).single();
+  const mode=data?.game_mode||'classic';
+  const pool=mode==='speed'?SENTENCES_SPEED:SENTENCES_NORMAL;
+  const sentences=shuffle(pool);
+  const{data:d2}=await sb.from('rooms').select('players').eq('code',roomCode).single();
+  if(d2){
+    const players=d2.players||{};
+    Object.keys(players).forEach(id=>{players[id].progress=0;players[id].wpm=0;players[id].done=false;players[id].sentences_done=0;});
+    await sb.from('rooms').update({status:'waiting',sentence:sentences[0],sentences:JSON.stringify(sentences),players}).eq('code',roomCode);
+  }
+  $('typing-input').value='';$('typing-input').disabled=false;
+  $('timer-bar').style.width='100%';
+  mySentencesDone=0;sentenceIndex=0;
+  enterWaiting();
+}
+
+function goMenu(){
+  if(subscription)sb.removeChannel(subscription);
+  resetState();showPage('page-lobby');
+}
+
+function resetState(){
+  clearInterval(gameTimerInterval);
+  roomCode=null;isHost=false;gameActive=false;
+  myTyped=0;myErrors=0;myStartTime=null;mySentencesDone=0;sentenceIndex=0;
+  countdownDone=false;gameDone=false;resultsDone=false;
+  $('typing-input').value='';$('typing-input').disabled=false;
+  $('code-input').value='';$('join-error').classList.remove('show');
+  myId='u_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+  _cachedMode=null;
+}
+</script>
+</body>
+</html>
